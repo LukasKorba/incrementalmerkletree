@@ -7,6 +7,18 @@ and this project adheres to Rust's notion of
 
 ## Unreleased
 
+### Added (0.6.2-compatible backport branch — not for release)
+- `shardtree::store::caching::SparseCachingShardStore`, a preload-based variant of
+  `CachingShardStore` that caches only an explicitly provided working set of shards (rather than
+  eagerly copying the entire backend) and writes back only the delta accumulated since preload.
+  This makes the in-memory overlay `O(working set)` rather than `O(tree)` per checkpoint. Reads
+  for a shard that exists in the backend but was not preloaded return the new
+  `shardtree::store::caching::SparseStoreError::NotPreloaded` rather than `None`.
+  Backport of the store merged to main in zcash/incrementalmerkletree#181 (commit fb2e072,
+  minus the post-#184 retained-checkpoint handling, which does not exist in the 0.6.2 trait);
+  exists so consumers on published shardtree 0.6.2 can [patch.crates-io] this rev until the
+  next shardtree release ships the store.
+
 ## [0.6.2] - 2026-02-20
 
 ### Added

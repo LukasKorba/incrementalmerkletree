@@ -139,6 +139,48 @@ pub trait ShardStore {
     /// If no checkpoint exists with the given ID, this does nothing.
     fn remove_checkpoint(&mut self, checkpoint_id: &Self::CheckpointId) -> Result<(), Self::Error>;
 
+    /// Adds the given checkpoint identifier to the set of checkpoints that must be retained when
+    /// pruning excess checkpoints.
+    ///
+    /// A retained checkpoint is excluded from the `max_checkpoints` budget and is never removed by
+    /// automatic pruning (see [`crate::ShardTree::prune_excess_checkpoints`]). The identifier may
+    /// be recorded even if no checkpoint with that identifier currently exists in the data store.
+    ///
+    /// BACKPORT NOTE (retention, from upstream `main`): unlike upstream — where these three
+    /// methods are REQUIRED — this backport PROVIDES no-op/empty defaults so that
+    /// pre-retention `ShardStore` implementations (e.g. `zcash_client_sqlite`'s) compile
+    /// unchanged and keep their exact pre-retention pruning behavior. Stores that support
+    /// retention override all three.
+    fn add_retained_checkpoint(
+        &mut self,
+        checkpoint_id: Self::CheckpointId,
+    ) -> Result<(), Self::Error> {
+        let _ = checkpoint_id;
+        Ok(())
+    }
+
+    /// Removes the given checkpoint identifier from the set of retained checkpoints, allowing it to
+    /// be pruned normally. Has no effect if the identifier is not in the retention set.
+    ///
+    /// See the backport note on [`ShardStore::add_retained_checkpoint`]: provided as a no-op
+    /// default; retention-supporting stores override.
+    fn remove_retained_checkpoint(
+        &mut self,
+        checkpoint_id: &Self::CheckpointId,
+    ) -> Result<(), Self::Error> {
+        let _ = checkpoint_id;
+        Ok(())
+    }
+
+    /// Returns the set of checkpoint identifiers that have been marked for retention via
+    /// [`ShardStore::add_retained_checkpoint`].
+    ///
+    /// See the backport note on [`ShardStore::add_retained_checkpoint`]: the default returns the
+    /// empty set (no retention); retention-supporting stores override.
+    fn retained_checkpoints(&self) -> Result<BTreeSet<Self::CheckpointId>, Self::Error> {
+        Ok(BTreeSet::new())
+    }
+
     /// Removes checkpoints with identifiers greater than to the given identifier, and removes mark
     /// removal metadata from the specified checkpoint.
     fn truncate_checkpoints_retaining(
@@ -244,6 +286,26 @@ impl<S: ShardStore> ShardStore for &mut S {
 
     fn remove_checkpoint(&mut self, checkpoint_id: &Self::CheckpointId) -> Result<(), Self::Error> {
         S::remove_checkpoint(self, checkpoint_id)
+    }
+
+    // Retention methods delegate explicitly: without these, the trait's no-op
+    // defaults would MASK the wrapped store's overrides behind an `&mut S`.
+    fn add_retained_checkpoint(
+        &mut self,
+        checkpoint_id: Self::CheckpointId,
+    ) -> Result<(), Self::Error> {
+        S::add_retained_checkpoint(self, checkpoint_id)
+    }
+
+    fn remove_retained_checkpoint(
+        &mut self,
+        checkpoint_id: &Self::CheckpointId,
+    ) -> Result<(), Self::Error> {
+        S::remove_retained_checkpoint(self, checkpoint_id)
+    }
+
+    fn retained_checkpoints(&self) -> Result<BTreeSet<Self::CheckpointId>, Self::Error> {
+        S::retained_checkpoints(self)
     }
 
     fn truncate_checkpoints_retaining(
